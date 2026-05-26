@@ -108,6 +108,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: master
+          # Need full token to push back to master.
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Formula
         env:
@@ -123,18 +125,21 @@ jobs:
           echo "--- updated formula ---"
           cat "$FILE"
 
-      - name: Open PR with formula bump
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "Bump Formula to v${{ needs.release.outputs.version }}"
-          branch: "automation/bump-formula-v${{ needs.release.outputs.version }}"
-          title: "Bump Formula to v${{ needs.release.outputs.version }}"
-          body: |
-            Automated formula bump for `v${{ needs.release.outputs.version }}`.
-
-            - URL: ${{ needs.release.outputs.tarball_url }}
-            - SHA-256: `${{ needs.release.outputs.sha256 }}`
-          delete-branch: true
+      - name: Commit and push formula bump
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Formula/kubernetes-tools.rb; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/kubernetes-tools.rb
+          # [skip ci] keeps the lint workflow from re-running for a metadata-only bump.
+          git commit -m "Bump Formula to v${VERSION} [skip ci]"
+          git push origin HEAD:master
 
   bump-formula-in-tap:
     name: Bump Formula in homebrew-tap
