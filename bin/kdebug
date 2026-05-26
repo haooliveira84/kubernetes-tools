@@ -24,18 +24,16 @@ show_help() {
 
 debug_pod() {
   local pod="$1"
-  local ns_flag=""
+  local args=("debug")
   if [[ -n "$KTOOLS_NAMESPACE" ]]; then
-    ns_flag="-n $KTOOLS_NAMESPACE"
+    args+=("-n" "$KTOOLS_NAMESPACE")
   fi
-
-  local args=("debug" $ns_flag "$pod" "-it" "--image=$IMAGE")
+  args+=("$pod" "-it" "--image=$IMAGE")
   if [[ -n "$TARGET_CONTAINER" ]]; then
     args+=("--target=$TARGET_CONTAINER")
   fi
 
   __info "Attaching debug container ($IMAGE) to pod $pod..."
-  # shellcheck disable=SC2086
   kubectl "${args[@]}"
 }
 

@@ -15,7 +15,13 @@ jobs:
       - name: Run shellcheck
         uses: ludeeus/action-shellcheck@master
         env:
-          SHELLCHECK_OPTS: -x -e SC1091,SC2086,SC2207
+          # -P bin: search for `source __common` inside the bin/ directory
+          # SC1091: cannot follow non-constant source
+          # SC2086: intentional unquoted expansion for kubectl flag passthrough
+          # SC2154: false positives caused by sourcing __common via PATH
+          # SC2207: array-from-command-substitution is intentional in pickers
+          # SC2317: unreachable shift after exit in case branches (false positive)
+          SHELLCHECK_OPTS: -x -P bin -e SC1091,SC2086,SC2154,SC2207,SC2317
         with:
           scandir: ./bin
           ignore_paths: gif
