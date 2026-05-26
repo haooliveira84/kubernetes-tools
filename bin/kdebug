@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Kubernetes Tools - kdebug
+# Attach an ephemeral debug container to a pod (kubectl debug).
+
+source __common
+
+IMAGE="nicolaka/netshoot"
+TARGET_CONTAINER=""
+NODE_DEBUG=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Debug a pod with an ephemeral container: ${__style_underlined}kdebug <pod>${__style_end}"
+  echo -e "- Use a different image: ${__style_underlined}kdebug -i <image> <pod>${__style_end}"
+  echo -e "- Target a specific container: ${__style_underlined}kdebug -c <container> <pod>${__style_end}"
+  echo -e "- Debug a node (privileged): ${__style_underlined}kdebug --node <node>${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kdebug -n <ns> <pod>${__style_end}"
+  echo
+  echo -e "${__style_dim}Default image: $IMAGE (curl, dig, tcpdump, nc, jq...).${__style_end}"
+  echo -e "${__style_dim}Requires Kubernetes 1.23+ (EphemeralContainers).${__style_end}\n"
+}
+
+debug_pod() {
+  local pod="$1"
+  local ns_flag=""
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  local args=("debug" $ns_flag "$pod" "-it" "--image=$IMAGE")
+  if [[ -n "$TARGET_CONTAINER" ]]; then
+    args+=("--target=$TARGET_CONTAINER")
+  fi
+
+  __info "Attaching debug container ($IMAGE) to pod $pod..."
+  # shellcheck disable=SC2086
+  kubectl "${args[@]}"
+}
+
+debug_node() {
+  local node="$1"
+  __info "Starting node debug session on $node..."
+  kubectl debug "node/$node" -it --image="$IMAGE"
+}
+
+POD=""
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -i | --image ) shift
+      IMAGE="$1"
+      ;;
+    -c | --container ) shift
+      TARGET_CONTAINER="$1"
+      ;;
+    --node ) shift
+      NODE_DEBUG="$1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      POD="$1"
+      ;;
+  esac
+  shift
+done
+
+if [[ -n "$NODE_DEBUG" ]]; then
+  debug_node "$NODE_DEBUG"
+  exit 0
+fi
+
+if [[ -z "$POD" ]]; then
+  show_help
+  exit 0
+fi
+
+debug_pod "$POD"

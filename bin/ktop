@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# Kubernetes Tools - ktop
+# Top pods/nodes with sort options.
+
+source __common
+
+KIND="pods"
+SORT="cpu"
+ALL_NS=""
+CONTAINERS=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Top pods in current namespace: ${__style_underlined}ktop${__style_end}"
+  echo -e "- Top nodes: ${__style_underlined}ktop -N${__style_end}"
+  echo -e "- All namespaces: ${__style_underlined}ktop -a${__style_end}"
+  echo -e "- Sort by memory: ${__style_underlined}ktop -m${__style_end}"
+  echo -e "- Per container: ${__style_underlined}ktop --containers${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}ktop -n <ns>${__style_end}"
+  echo
+  echo -e "${__style_dim}Requires metrics-server in the cluster.${__style_end}\n"
+}
+
+run() {
+  local args=("top" "$KIND")
+  if [[ "$KIND" == "pods" ]]; then
+    if [[ -n "$ALL_NS" ]]; then
+      args+=("--all-namespaces")
+    elif [[ -n "$KTOOLS_NAMESPACE" ]]; then
+      args+=("-n" "$KTOOLS_NAMESPACE")
+    fi
+    [[ -n "$CONTAINERS" ]] && args+=("--containers")
+  fi
+  args+=("--sort-by=$SORT")
+  kubectl "${args[@]}"
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -a | --all )
+      ALL_NS="1"
+      ;;
+    -N | --nodes )
+      KIND="nodes"
+      ;;
+    -m | --memory )
+      SORT="memory"
+      ;;
+    -c | --cpu )
+      SORT="cpu"
+      ;;
+    --containers )
+      CONTAINERS="1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+run

@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# Kubernetes Tools - kevents
+# Show namespace events sorted by lastTimestamp (most recent at the bottom).
+
+source __common
+
+ALL_NS=""
+WATCH=""
+WARN_ONLY=""
+RESOURCE=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Events in current namespace: ${__style_underlined}kevents${__style_end}"
+  echo -e "- All namespaces: ${__style_underlined}kevents [-a|--all]${__style_end}"
+  echo -e "- Watch: ${__style_underlined}kevents [-w|--watch]${__style_end}"
+  echo -e "- Only warnings: ${__style_underlined}kevents [-W|--warnings]${__style_end}"
+  echo -e "- Events for a specific resource: ${__style_underlined}kevents <pod_name>${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kevents -n <ns>${__style_end}\n"
+}
+
+run() {
+  local args=("--sort-by=.lastTimestamp")
+  if [[ -n "$ALL_NS" ]]; then
+    args+=("--all-namespaces")
+  elif [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    args+=("-n" "$KTOOLS_NAMESPACE")
+  fi
+  [[ -n "$WATCH" ]] && args+=("-w")
+
+  if [[ -n "$RESOURCE" ]]; then
+    args+=("--field-selector" "involvedObject.name=$RESOURCE")
+  fi
+  if [[ -n "$WARN_ONLY" ]]; then
+    args+=("--field-selector" "type=Warning")
+  fi
+
+  kubectl get events "${args[@]}"
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -a | --all )
+      ALL_NS="1"
+      ;;
+    -w | --watch )
+      WATCH="1"
+      ;;
+    -W | --warnings )
+      WARN_ONLY="1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      RESOURCE="$1"
+      ;;
+  esac
+  shift
+done
+
+run

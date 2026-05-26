@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Kubernetes Tools - kpf
+# Port-forward to a pod or service with an interactive picker.
+
+source __common
+
+KIND="pod"
+LOCAL_PORT=""
+REMOTE_PORT=""
+TARGET=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Port-forward (interactive): ${__style_underlined}kpf${__style_end}"
+  echo -e "- Specific pod: ${__style_underlined}kpf <pod> [local:]remote${__style_end}"
+  echo -e "- Service instead of pod: ${__style_underlined}kpf -s <svc> [local:]remote${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kpf -n <ns> ...${__style_end}"
+  echo
+  echo -e "Examples:"
+  echo -e "  ${__style_dim}kpf my-pod 8080${__style_end}              # local 8080 -> pod 8080"
+  echo -e "  ${__style_dim}kpf my-pod 9000:8080${__style_end}         # local 9000 -> pod 8080"
+  echo -e "  ${__style_dim}kpf -s my-svc 5432${__style_end}           # forward a service"
+  echo
+}
+
+run() {
+  local ns_flag=""
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  if [[ -z "$TARGET" ]]; then
+    local items
+    if [[ "$KIND" == "svc" ]]; then
+      # shellcheck disable=SC2086,SC2207
+      items=($(kubectl get svc $ns_flag -o name | sed 's|service/||'))
+    else
+      # shellcheck disable=SC2086,SC2207
+      items=($(kubectl get pod $ns_flag -o name | sed 's|pod/||'))
+    fi
+    if [[ ${#items[@]} -eq 0 ]]; then
+      __err "No ${KIND}s found."
+      exit 1
+    fi
+    TARGET="$(__pick "Select a ${KIND}: " "${items[@]}")"
+    [[ -z "$TARGET" ]] && exit 1
+  fi
+
+  if [[ -z "$REMOTE_PORT" ]]; then
+    __err "No port specified."
+    show_help
+    exit 1
+  fi
+
+  local mapping
+  if [[ -n "$LOCAL_PORT" ]]; then
+    mapping="${LOCAL_PORT}:${REMOTE_PORT}"
+  else
+    mapping="${REMOTE_PORT}"
+  fi
+
+  __info "Forwarding $KIND/$TARGET $mapping ..."
+  # shellcheck disable=SC2086
+  kubectl port-forward $ns_flag "$KIND/$TARGET" "$mapping"
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -s | --service )
+      KIND="svc"
+      ;;
+    -p | --pod )
+      KIND="pod"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      if [[ -z "$TARGET" && "$1" != *:* && ! "$1" =~ ^[0-9]+$ ]]; then
+        TARGET="$1"
+      elif [[ "$1" == *:* ]]; then
+        LOCAL_PORT="${1%%:*}"
+        REMOTE_PORT="${1##*:}"
+      else
+        REMOTE_PORT="$1"
+      fi
+      ;;
+  esac
+  shift
+done
+
+run

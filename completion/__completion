@@ -1,99 +1,84 @@
-current_namespace() {
+__ktools_current_namespace() {
+  local namespace
   namespace="$(kubectl config view -o=jsonpath="{.contexts[?(@.name==\"$(kubectl config current-context)\")].context.namespace}")"
   if [[ -z "${namespace}" ]]; then
     echo default
   else
-    echo $namespace
+    echo "$namespace"
   fi
 }
 
-__pods ()
-{
-  # pointer to current completion word.
-  local cur
-
-  # array variable storing the possible completions.
+__ktools_pods() {
+  local cur ns
   COMPREPLY=()
-  cur=${COMP_WORDS[COMP_CWORD]}
-  namespaces=$(kubectl get pod -n $(current_namespace)|sed '1d'|awk '{print $1}')
-
-  COMPREPLY=( $( compgen -W "$namespaces" -- $cur ) )
-
-  case "$cur" in
-    -*)
-    # generate the completion matches and load them into $COMPREPLY array.
-    COMPREPLY=( $( compgen -W '-h -s' -- $cur ) );;
-  esac
-
-  return 0
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  ns="$(__ktools_current_namespace)"
+  local items
+  items="$(kubectl get pod -n "$ns" --no-headers 2>/dev/null | awk '{print $1}')"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
 }
 
-__namespaces ()
-{
-  # pointer to current completion word.
+__ktools_namespaces() {
   local cur
-
-  # array variable storing the possible completions.
   COMPREPLY=()
-  cur=${COMP_WORDS[COMP_CWORD]}
-  namespaces=$(kubectl get ns |sed '1d'|awk '{print $1}')
-
-  COMPREPLY=( $( compgen -W "$namespaces" -- $cur ) )
-
-  case "$cur" in
-    -*)
-    # generate the completion matches and load them into $COMPREPLY array.
-    COMPREPLY=( $( compgen -W '-h -s' -- $cur ) );;
-  esac
-
-  return 0
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  local items
+  items="$(kubectl get ns --no-headers 2>/dev/null | awk '{print $1}')"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
 }
 
-__contexts ()
-{
-  # pointer to current completion word.
+__ktools_contexts() {
   local cur
-
-  # array variable storing the possible completions.
   COMPREPLY=()
-  cur=${COMP_WORDS[COMP_CWORD]}
-  contexts=$(kubectl config get-contexts |sed -e "s/\*//"|sed '1d'|awk '{print $1}')
-
-  COMPREPLY=( $( compgen -W "$contexts" -- $cur ) )
-
-  case "$cur" in
-    -*)
-    # generate the completion matches and load them into $COMPREPLY array.
-    COMPREPLY=( $( compgen -W '-h -s' -- $cur ) );;
-  esac
-
-  return 0
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  local items
+  items="$(kubectl config get-contexts -o name 2>/dev/null)"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
 }
 
-__nodes ()
-{
-  # pointer to current completion word.
+__ktools_nodes() {
   local cur
-
-  # array variable storing the possible completions.
   COMPREPLY=()
-  cur=${COMP_WORDS[COMP_CWORD]}
-  ips=$(kubectl get nodes -o json | jq -r '.items[].status.addresses[].address' | paste - - - | cut -f 1)
-
-  COMPREPLY=( $( compgen -W "$ips" -- $cur ) )
-
-  case "$cur" in
-    -*)
-    # generate the completion matches and load them into $COMPREPLY array.
-    COMPREPLY=( $( compgen -W '-h -s' -- $cur ) );;
-  esac
-
-  return 0
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  local items
+  items="$(kubectl get nodes --no-headers 2>/dev/null | awk '{print $1}')"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
 }
 
-# apply autocompletions
-complete -F __pods klogs kexec kcopy kpod
-complete -F __namespaces kns
-complete -F __contexts kctx
+__ktools_deployments() {
+  local cur ns
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  ns="$(__ktools_current_namespace)"
+  local items
+  items="$(kubectl get deployment -n "$ns" --no-headers 2>/dev/null | awk '{print $1}')"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
+}
 
-# remove autocompletion cache files e.g. .zcompdump after making changes
+__ktools_services() {
+  local cur ns
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  ns="$(__ktools_current_namespace)"
+  local items
+  items="$(kubectl get svc -n "$ns" --no-headers 2>/dev/null | awk '{print $1}')"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
+}
+
+__ktools_secrets() {
+  local cur ns
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  ns="$(__ktools_current_namespace)"
+  local items
+  items="$(kubectl get secret -n "$ns" --no-headers 2>/dev/null | awk '{print $1}')"
+  COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
+}
+
+complete -F __ktools_pods        klogs kexec kcopy kpod kdebug
+complete -F __ktools_namespaces  kns
+complete -F __ktools_contexts    kctx
+complete -F __ktools_nodes       knode
+complete -F __ktools_deployments krestart kscale
+complete -F __ktools_services    kpf
+complete -F __ktools_secrets     ksecret

@@ -1,0 +1,31 @@
+name: Lint
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@master
+        env:
+          SHELLCHECK_OPTS: -x -e SC1091,SC2086,SC2207
+        with:
+          scandir: ./bin
+          ignore_paths: gif
+
+  formula:
+    name: Brew style check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: brew style
+        run: brew style Formula/kubernetes-tools.rb || true
+      - name: brew audit (offline checks)
+        run: brew audit --formula --strict --online=false Formula/kubernetes-tools.rb || true

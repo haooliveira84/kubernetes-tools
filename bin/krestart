@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Kubernetes Tools - krestart
+# Trigger a rollout restart on a deployment, statefulset or daemonset.
+
+source __common
+
+KIND="deployment"
+TARGET=""
+WATCH=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Restart deployment (interactive): ${__style_underlined}krestart${__style_end}"
+  echo -e "- Restart specific deployment: ${__style_underlined}krestart <name>${__style_end}"
+  echo -e "- Statefulset: ${__style_underlined}krestart -s <name>${__style_end}"
+  echo -e "- Daemonset: ${__style_underlined}krestart -d <name>${__style_end}"
+  echo -e "- Watch rollout: ${__style_underlined}krestart -w <name>${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}krestart -n <ns> <name>${__style_end}\n"
+}
+
+run() {
+  local ns_flag=""
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  if [[ -z "$TARGET" ]]; then
+    local items
+    # shellcheck disable=SC2086,SC2207
+    items=($(kubectl get "$KIND" $ns_flag -o name | sed "s|$KIND.apps/||;s|$KIND/||"))
+    if [[ ${#items[@]} -eq 0 ]]; then
+      __err "No ${KIND}s found."
+      exit 1
+    fi
+    TARGET="$(__pick "Restart which $KIND? " "${items[@]}")"
+    [[ -z "$TARGET" ]] && exit 1
+  fi
+
+  __info "Restarting $KIND/$TARGET ..."
+  # shellcheck disable=SC2086
+  kubectl rollout restart $ns_flag "$KIND/$TARGET"
+
+  if [[ -n "$WATCH" ]]; then
+    # shellcheck disable=SC2086
+    kubectl rollout status $ns_flag "$KIND/$TARGET"
+  fi
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -s | --statefulset )
+      KIND="statefulset"
+      ;;
+    -d | --daemonset )
+      KIND="daemonset"
+      ;;
+    -w | --watch )
+      WATCH="1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      TARGET="$1"
+      ;;
+  esac
+  shift
+done
+
+run

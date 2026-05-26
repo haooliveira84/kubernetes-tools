@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      sha256: ${{ steps.sha.outputs.sha256 }}
+      tarball_url: ${{ steps.sha.outputs.tarball_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: meta
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.meta.outputs.tag }}" \
+            --title "${{ steps.meta.outputs.tag }}" \
+            --generate-notes
+
+      - name: Compute tarball SHA-256
+        id: sha
+        run: |
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${{ steps.meta.outputs.tag }}.tar.gz"
+          # GitHub may take a moment to publish the tarball after the release is created.
+          for i in 1 2 3 4 5; do
+            if curl -sfLI "$URL" >/dev/null; then break; fi
+            sleep $((i * 3))
+          done
+          SHA="$(curl -sfL "$URL" | shasum -a 256 | awk '{print $1}')"
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "tarball_url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Tarball SHA-256: ${SHA}"
+
+  bump-formula-in-repo:
+    name: Bump Formula in this repo
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Update Formula
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          SHA256: ${{ needs.release.outputs.sha256 }}
+          TARBALL_URL: ${{ needs.release.outputs.tarball_url }}
+        run: |
+          set -euo pipefail
+          FILE="Formula/kubernetes-tools.rb"
+          sed -i -E "s|url \".*\"|url \"${TARBALL_URL}\"|" "$FILE"
+          sed -i -E "s|sha256 \"[0-9a-f]{64}\"|sha256 \"${SHA256}\"|" "$FILE"
+          sed -i -E "s|version \".*\"|version \"${VERSION}\"|" "$FILE"
+          echo "--- updated formula ---"
+          cat "$FILE"
+
+      - name: Open PR with formula bump
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Bump Formula to v${{ needs.release.outputs.version }}"
+          branch: "automation/bump-formula-v${{ needs.release.outputs.version }}"
+          title: "Bump Formula to v${{ needs.release.outputs.version }}"
+          body: |
+            Automated formula bump for `v${{ needs.release.outputs.version }}`.
+
+            - URL: ${{ needs.release.outputs.tarball_url }}
+            - SHA-256: `${{ needs.release.outputs.sha256 }}`
+          delete-branch: true
+
+  bump-formula-in-tap:
+    name: Bump Formula in homebrew-tap
+    needs: release
+    runs-on: ubuntu-latest
+    # Only runs if a HOMEBREW_TAP_TOKEN secret is configured.
+    if: ${{ vars.HOMEBREW_TAP_REPO != '' }}
+    steps:
+      - name: Bump formula in tap
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: kubernetes-tools
+          formula-path: Formula/kubernetes-tools.rb
+          homebrew-tap: ${{ vars.HOMEBREW_TAP_REPO }}
+          tag-name: ${{ github.ref_name }}
+          download-url: ${{ needs.release.outputs.tarball_url }}
+          commit-message: |
+            kubernetes-tools ${{ needs.release.outputs.version }}
+
+            Created by https://github.com/mislav/bump-homebrew-formula-action
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

@@ -6,52 +6,93 @@
 # You may use, distribute or modify this software under the terms of the MIT license.
 
 source __common
-get_shell() {
-  pod=$1
 
-  PS3="Please select a container:"
-  containers=($(/bin/sh -c "kubectl get pod $pod -o jsonpath='{.spec.containers[*].name}'"))
+CONTAINER=""
 
-  # if there is only one container, get a shell
-  if [[ ${#containers[@]} -eq 1 ]] ; then
-    selected_container=$containers
-  else
-    # if there are more than one container, prompt select
-    select container in "${containers[@]}"
-    do
-      selected_container=$container
-      break
-    done
-  fi
-
-  echo -e "\nGetting you a shell in $selected_container...\n"
-  # if bash doesn't work, try sh
-  kubectl exec $pod -c $selected_container -ti -- bash 2>/dev/null || kubectl exec $pod -c $selected_container -ti -- sh
-  exit 0
-  
-}
-
-# sohw help
 show_help() {
   echo -e $__title
   echo
-  echo -e "- Get a shell of a selected container: ${__style_underlined}kexec [pod_name]${__style_end}\n"
+  echo -e "- Get a shell of a selected container: ${__style_underlined}kexec [pod_name]${__style_end}"
+  echo -e "- Run a custom command: ${__style_underlined}kexec [pod_name] -- <command> [args...]${__style_end}"
+  echo -e "- Pick a container explicitly: ${__style_underlined}kexec -c <container> [pod_name]${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kexec -n <ns> [pod_name]${__style_end}\n"
 }
 
-# parse arguments
+run_exec() {
+  local pod="$1"
+  shift
+  local cmd=("$@")
+
+  local ns_flag=""
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  local container="$CONTAINER"
+  if [[ -z "$container" ]]; then
+    container="$(__pick_container "$pod")" || exit 1
+  fi
+  if [[ -z "$container" ]]; then
+    __err "No container selected."
+    exit 1
+  fi
+
+  if [[ ${#cmd[@]} -gt 0 ]]; then
+    echo -e "\nRunning '${cmd[*]}' in $container...\n"
+    # shellcheck disable=SC2086
+    kubectl exec $ns_flag "$pod" -c "$container" -ti -- "${cmd[@]}"
+  else
+    echo -e "\nGetting you a shell in $container...\n"
+    # try bash first, fall back to sh
+    # shellcheck disable=SC2086
+    kubectl exec $ns_flag "$pod" -c "$container" -ti -- bash 2>/dev/null \
+      || kubectl exec $ns_flag "$pod" -c "$container" -ti -- sh
+  fi
+}
+
+POD=""
+CMD=()
+PARSING_CMD=""
+
 while [ "$1" != "" ]; do
+  if [[ -n "$PARSING_CMD" ]]; then
+    CMD+=("$1")
+    shift
+    continue
+  fi
   case $1 in
-    -n | --namespace ) shift
-      get_shell "$1"
+    -- )
+      PARSING_CMD="1"
       ;;
-    -h | --help ) shift
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -c | --container ) shift
+      CONTAINER="$1"
+      ;;
+    -h | --help )
       show_help
       exit 0
       ;;
-    * ) get_shell "$1"
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      if [[ -z "$POD" ]]; then
+        POD="$1"
+      else
+        CMD+=("$1")
+      fi
+      ;;
   esac
   shift
 done
 
-# show help if no arguments
-if [ $# -eq 0 ]; then show_help; fi
+if [[ -z "$POD" ]]; then
+  show_help
+  exit 0
+fi
+
+run_exec "$POD" "${CMD[@]}"

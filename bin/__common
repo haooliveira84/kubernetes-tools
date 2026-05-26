@@ -4,20 +4,91 @@ __style_green="\033[32m"
 __style_blue="\033[34m"
 __style_yellow="\033[33m"
 __style_cyan="\033[36m"
+__style_magenta="\033[35m"
 __style_bold="\033[1m"
 __style_dim="\033[2m"
 __style_underlined="\033[4m"
 __style_inverted="\033[7m"
 
 __app_name="Kubernetes Tools"
-__version="v2.1.0"
+__version="v2.2.0"
 __title="$__style_yellow$__app_name $__version - $(basename -- $0)$__style_end"
 
+__current_context() {
+  kubectl config current-context 2>/dev/null
+}
+
 __current_namespace() {
-  namespace="$(kubectl config view -o=jsonpath="{.contexts[?(@.name==\"$(current_context)\")].context.namespace}")"
+  local ctx
+  ctx="$(__current_context)"
+  local namespace
+  namespace="$(kubectl config view -o=jsonpath="{.contexts[?(@.name==\"$ctx\")].context.namespace}")"
   if [[ -z "${namespace}" ]]; then
     echo "default"
   else
     echo "${namespace}"
   fi
+}
+
+# Resolve the namespace flag for a kubectl invocation.
+# Echoes "-n <ns>" if KTOOLS_NAMESPACE is set, otherwise nothing.
+__ns_flag() {
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    echo "-n $KTOOLS_NAMESPACE"
+  fi
+}
+
+__err() {
+  echo -e "${__style_red}Error:${__style_end} $*" >&2
+}
+
+__info() {
+  echo -e "${__style_cyan}$*${__style_end}"
+}
+
+# Returns 0 if fzf is available, 1 otherwise.
+__has_fzf() {
+  command -v fzf >/dev/null 2>&1
+}
+
+# Interactive picker. Uses fzf if available, falls back to PS3/select.
+# Usage: __pick "Prompt: " "item1" "item2" ...
+__pick() {
+  local prompt="$1"
+  shift
+  local items=("$@")
+  if [[ ${#items[@]} -eq 0 ]]; then
+    return 1
+  fi
+  if [[ ${#items[@]} -eq 1 ]]; then
+    echo "${items[0]}"
+    return 0
+  fi
+  if __has_fzf; then
+    printf '%s\n' "${items[@]}" | fzf --prompt="$prompt" --height=40% --reverse
+  else
+    PS3="$prompt"
+    local choice
+    select choice in "${items[@]}"; do
+      if [[ -n "$choice" ]]; then
+        echo "$choice"
+        return 0
+      fi
+    done
+  fi
+}
+
+# Pick a container from a pod. Echoes the chosen container name.
+__pick_container() {
+  local pod="$1"
+  local ns_flag
+  ns_flag="$(__ns_flag)"
+  local containers
+  # shellcheck disable=SC2086
+  containers=($(kubectl get pod $ns_flag "$pod" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null))
+  if [[ ${#containers[@]} -eq 0 ]]; then
+    __err "Pod \"$pod\" not found or has no containers."
+    return 1
+  fi
+  __pick "Select a container: " "${containers[@]}"
 }

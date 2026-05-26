@@ -6,43 +6,95 @@
 # You may use, distribute or modify this software under the terms of the MIT license.
 
 source __common
-# get pods
-get_pods() {
-  kubectl get pod $1
-  exit
-}
 
-describe_pod() {
-  kubectl describe pod $1
-  exit
-}
+WIDE=""
+ALL_NS=""
+STATUS_FILTER=""
+WATCH=""
+ACTION="list"
+POD_NAME=""
 
-# sohw help
 show_help() {
   echo -e $__title
   echo
   echo -e "- Get pods in current namespace: ${__style_underlined}kpod${__style_end}"
   echo -e "- Describe pod: ${__style_underlined}kpod [pod_name]${__style_end}"
-  echo -e "- Get pods in all namespaces: ${__style_underlined}kpod [-a]${__style_end}\n"
+  echo -e "- Get pods in all namespaces: ${__style_underlined}kpod [-a|--all]${__style_end}"
+  echo -e "- Get pods in another namespace: ${__style_underlined}kpod [-n|--namespace] <ns>${__style_end}"
+  echo -e "- Wide output: ${__style_underlined}kpod [-o|--wide]${__style_end}"
+  echo -e "- Filter by status: ${__style_underlined}kpod [-s|--status] <status>${__style_end}"
+  echo -e "    Status can be: Pending, Running, Failed, Succeeded, Unknown,"
+  echo -e "    CrashLoopBackOff, ImagePullBackOff, Evicted, NotReady, etc."
+  echo -e "- Watch pods: ${__style_underlined}kpod [-w|--watch]${__style_end}\n"
 }
 
-# parse arguments
+list_pods() {
+  local args=()
+  if [[ -n "$ALL_NS" ]]; then
+    args+=("--all-namespaces")
+  elif [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    args+=("-n" "$KTOOLS_NAMESPACE")
+  fi
+  if [[ -n "$WIDE" ]]; then
+    args+=("-o" "wide")
+  fi
+  if [[ -n "$WATCH" ]]; then
+    args+=("-w")
+  fi
+
+  if [[ -n "$STATUS_FILTER" ]]; then
+    # Header + filtered rows; case-insensitive grep against the STATUS column.
+    kubectl get pod "${args[@]}" --no-headers=false 2>/dev/null \
+      | awk -v f="$STATUS_FILTER" 'NR==1 || tolower($0) ~ tolower(f)'
+  else
+    kubectl get pod "${args[@]}"
+  fi
+}
+
+describe_pod() {
+  local args=()
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    args+=("-n" "$KTOOLS_NAMESPACE")
+  fi
+  kubectl describe pod "${args[@]}" "$1"
+}
+
 while [ "$1" != "" ]; do
   case $1 in
     -n | --namespace ) shift
-      get_pods "-n $1"
+      export KTOOLS_NAMESPACE="$1"
       ;;
-    -a | --all) shift
-      get_pods "--all-namespaces"
+    -a | --all )
+      ALL_NS="1"
       ;;
-    -h | --help ) shift
+    -o | --wide )
+      WIDE="1"
+      ;;
+    -s | --status ) shift
+      STATUS_FILTER="$1"
+      ;;
+    -w | --watch )
+      WATCH="1"
+      ;;
+    -h | --help )
       show_help
       exit 0
       ;;
-    * ) describe_pod "$1"
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      ACTION="describe"
+      POD_NAME="$1"
+      ;;
   esac
   shift
 done
 
-# get pods in current namespace if no arguments specified
-if [ $# -eq 0 ]; then get_pods; fi
+if [[ "$ACTION" == "describe" ]]; then
+  describe_pod "$POD_NAME"
+else
+  list_pods
+fi

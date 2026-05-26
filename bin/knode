@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# Kubernetes Tools - knode
+# Inspect nodes: capacity, taints, conditions, hosted pods.
+
+source __common
+
+ACTION="list"
+NODE=""
+WIDE=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- List nodes: ${__style_underlined}knode${__style_end}"
+  echo -e "- Wide listing: ${__style_underlined}knode -o${__style_end}"
+  echo -e "- Describe a node: ${__style_underlined}knode <name>${__style_end}"
+  echo -e "- Show taints: ${__style_underlined}knode -t${__style_end}"
+  echo -e "- Show pods scheduled on a node: ${__style_underlined}knode -p <name>${__style_end}\n"
+}
+
+list_nodes() {
+  if [[ -n "$WIDE" ]]; then
+    kubectl get nodes -o wide
+  else
+    kubectl get nodes
+  fi
+}
+
+describe_node() {
+  kubectl describe node "$1"
+}
+
+show_taints() {
+  echo -e "${__style_bold}NODE\tTAINTS${__style_end}"
+  kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.taints}{"\n"}{end}'
+}
+
+pods_on_node() {
+  local node="$1"
+  kubectl get pods --all-namespaces --field-selector "spec.nodeName=$node" -o wide
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -o | --wide )
+      WIDE="1"
+      ;;
+    -t | --taints )
+      ACTION="taints"
+      ;;
+    -p | --pods ) shift
+      ACTION="pods"
+      NODE="$1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      ACTION="describe"
+      NODE="$1"
+      ;;
+  esac
+  shift
+done
+
+case "$ACTION" in
+  describe ) describe_node "$NODE" ;;
+  taints ) show_taints ;;
+  pods ) pods_on_node "$NODE" ;;
+  * ) list_nodes ;;
+esac

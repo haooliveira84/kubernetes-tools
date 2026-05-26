@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Kubernetes Tools - kclean
+# Delete pods in Evicted/Failed/Error/Completed states.
+
+source __common
+
+ALL_NS=""
+DRY_RUN=""
+ASSUME_YES=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Clean problematic pods in current namespace: ${__style_underlined}kclean${__style_end}"
+  echo -e "- All namespaces: ${__style_underlined}kclean -a${__style_end}"
+  echo -e "- Dry run: ${__style_underlined}kclean --dry-run${__style_end}"
+  echo -e "- Skip confirmation: ${__style_underlined}kclean -y${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kclean -n <ns>${__style_end}"
+  echo
+  echo -e "${__style_dim}Targets pods with status: Evicted, Failed, Error, Completed, NodeLost.${__style_end}\n"
+}
+
+run() {
+  local ns_flag=""
+  if [[ -n "$ALL_NS" ]]; then
+    ns_flag="--all-namespaces"
+  elif [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  # shellcheck disable=SC2086
+  local candidates
+  candidates=$(kubectl get pods $ns_flag --no-headers 2>/dev/null \
+    | awk '$0 ~ /Evicted|Failed|Error|Completed|NodeLost/ {print}')
+
+  if [[ -z "$candidates" ]]; then
+    __info "Nothing to clean."
+    exit 0
+  fi
+
+  echo -e "${__style_yellow}Pods to delete:${__style_end}"
+  echo "$candidates"
+  echo
+
+  if [[ -n "$DRY_RUN" ]]; then
+    __info "Dry run: no pods were deleted."
+    exit 0
+  fi
+
+  if [[ -z "$ASSUME_YES" ]]; then
+    read -rp "Proceed with deletion? [y/N] " ans
+    if [[ "$ans" != "y" && "$ans" != "Y" ]]; then
+      __info "Aborted."
+      exit 0
+    fi
+  fi
+
+  if [[ -n "$ALL_NS" ]]; then
+    echo "$candidates" | awk '{print $1, $2}' | while read -r ns pod; do
+      kubectl delete pod "$pod" -n "$ns"
+    done
+  else
+    # shellcheck disable=SC2086
+    echo "$candidates" | awk '{print $1}' | xargs -r kubectl delete pod $ns_flag
+  fi
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -a | --all )
+      ALL_NS="1"
+      ;;
+    --dry-run )
+      DRY_RUN="1"
+      ;;
+    -y | --yes )
+      ASSUME_YES="1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+run

@@ -7,68 +7,71 @@
 
 source __common
 
-current_context() {
-  kubectl config current-context
-}
-
-list_namespaces() {
-  echo "Current Namespace: $(__current_namespace)"
-  echo "Current Context: $(current_context)"
-  echo
-  echo "All namespaces:"
-  kubectl get ns | sed ''/$(__current_namespace)/s//`printf "\033[32m$(__current_namespace)\033[0m"`/''
-  exit
-}
-
-# prompt ns select
-select_ns() {
-  echo -e "Setting default namespace:\n"
-  PS3="Please select a namespace:"
-  OLD_IFS="$IFS"
-  IFS=$'\n'
-  NAMESPACES=($(kubectl get ns |awk '{print $1}'|sed '1d'))
-  IFS="$OLD_IFS"
-
-  select namespace in "${NAMESPACES[@]}"
-  do
-    update_context $namespace
-    break
-  done
-}
-
-# update context
-update_context() {
-    echo -e "\nSetting $1 as default namespace in current context...\n"
-    kubectl config set-context $(kubectl config current-context) --namespace=$1
-    exit
-}
-
-# sohw help
 show_help() {
   echo -e $__title
   echo
   echo -e "- List current and all namespaces: ${__style_underlined}kns${__style_end}"
-  echo -e "- Select a default namespace: ${__style_underlined}kns [-s|--select]${__style_end}"
-  echo -e "- Specify a default namespace: ${__style_underlined}kns [namespace]${__style_end}\n"
+  echo -e "- Interactive selection: ${__style_underlined}kns [-s|--select]${__style_end}"
+  echo -e "- Switch to specified namespace: ${__style_underlined}kns [namespace]${__style_end}\n"
 }
 
-# parse arguments
+list_namespaces() {
+  local ctx ns
+  ctx="$(__current_context)"
+  ns="$(__current_namespace)"
+  echo -e "Current Context:   ${__style_green}${ctx}${__style_end}"
+  echo -e "Current Namespace: ${__style_green}${ns}${__style_end}"
+  echo
+  echo "All namespaces:"
+  kubectl get ns | sed ''/$ns/s//`printf "\033[32m$ns\033[0m"`/''
+}
+
+select_ns() {
+  echo -e "Setting default namespace:\n"
+  local namespaces
+  # shellcheck disable=SC2207
+  namespaces=($(kubectl get ns -o name | sed 's|namespace/||'))
+  if [[ ${#namespaces[@]} -eq 0 ]]; then
+    __err "No namespaces found."
+    exit 1
+  fi
+  local choice
+  choice="$(__pick "Select a namespace: " "${namespaces[@]}")"
+  [[ -z "$choice" ]] && exit 1
+  update_context "$choice"
+}
+
+update_context() {
+  local ns="$1"
+  if [[ -z "$ns" ]]; then
+    __err "No namespace specified."
+    exit 1
+  fi
+  echo -e "\nSetting \"$ns\" as default namespace in current context...\n"
+  kubectl config set-context "$(__current_context)" --namespace="$ns"
+}
+
 while [ "$1" != "" ]; do
   case $1 in
-    -n | --namespace ) shift
-      update_context $1
-      ;;
-    -s | --select ) shift
+    -s | --select )
       select_ns
+      exit 0
       ;;
-    -h | --help ) shift
+    -h | --help )
       show_help
       exit 0
       ;;
-    * ) update_context $1
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      update_context "$1"
+      exit 0
+      ;;
   esac
   shift
 done
 
-# list namespaces if no arguments
 if [ $# -eq 0 ]; then list_namespaces; fi

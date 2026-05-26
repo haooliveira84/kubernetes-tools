@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Kubernetes Tools - kscale
+# Scale a deployment/statefulset quickly.
+
+source __common
+
+KIND="deployment"
+TARGET=""
+REPLICAS=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Scale a deployment: ${__style_underlined}kscale <name> <replicas>${__style_end}"
+  echo -e "- Statefulset: ${__style_underlined}kscale -s <name> <replicas>${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kscale -n <ns> <name> <replicas>${__style_end}\n"
+}
+
+run() {
+  if [[ -z "$TARGET" || -z "$REPLICAS" ]]; then
+    show_help
+    exit 1
+  fi
+  if ! [[ "$REPLICAS" =~ ^[0-9]+$ ]]; then
+    __err "Replicas must be a non-negative integer (got \"$REPLICAS\")."
+    exit 1
+  fi
+
+  local ns_flag=""
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  __info "Scaling $KIND/$TARGET to $REPLICAS replicas..."
+  # shellcheck disable=SC2086
+  kubectl scale $ns_flag "$KIND/$TARGET" --replicas="$REPLICAS"
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -s | --statefulset )
+      KIND="statefulset"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      if [[ -z "$TARGET" ]]; then
+        TARGET="$1"
+      else
+        REPLICAS="$1"
+      fi
+      ;;
+  esac
+  shift
+done
+
+run

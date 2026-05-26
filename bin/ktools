@@ -5,83 +5,113 @@
 #
 # You may use, distribute or modify this software under the terms of the MIT license.
 
-
 source __common
-function auto_completion() {
-	echo "Adding bash completion"
-	path=$1/completion/__completion
 
-	if [[ $SHELL == *"zsh"* ]]; then
-		echo -e "\nZSH detected. The following lines will be added to $HOME/.zshrc"
-		echo -e " autoload -U compaudit compinit bashcompinit\n compaudit && compinit && bashcompinit\n source $path\n"
-		read -p "Press [Enter] to continue..."
+auto_completion() {
+  echo "Adding shell completion"
+  local app_root="$1"
+  local path="$app_root/completion/__completion"
 
-		echo -e "\n#Kubernetes Tools zsh completion start\nautoload -U compaudit compinit bashcompinit\ncompaudit && compinit && bashcompinit\nsource $path\n#Kubernetes Tools zsh completion end\n" >> $HOME/.zshrc
-		echo -e "\n.zshrc updated. Start a new shell to enjoy tab completion!"
-	elif [[ $SHELL == *"bash"* ]]; then
-		echo -e "\nBASH detected. The following lines will be added to $HOME/.bashrc"
-		echo -e " source $path\n"
-		read -p "Press [Enter] to continue..."
+  if [[ $SHELL == *"zsh"* ]]; then
+    echo -e "\nZSH detected. The following lines will be added to $HOME/.zshrc"
+    echo -e " autoload -U compaudit compinit bashcompinit\n compaudit && compinit && bashcompinit\n source $path\n"
+    read -rp "Press [Enter] to continue..."
 
-		echo -e "\n#Kubernetes Tools zsh completion start\nsource $path\n#Kubernetes Tools zsh completion end\n" >> $HOME/.bashrc
-		echo -e "\n.bashrc updated. Start a new shell to enjoy tab completion!"
-	elif [[ $SHELL = *"fish"* ]]; then
-		source_path=$1/completion/kubernetes-tools.fish
-		destination_path=$HOME/.config/fish/completions/kubernetes-tools.fish
+    echo -e "\n#Kubernetes Tools zsh completion start\nautoload -U compaudit compinit bashcompinit\ncompaudit && compinit && bashcompinit\nsource $path\n#Kubernetes Tools zsh completion end\n" >> "$HOME/.zshrc"
+    echo -e "\n.zshrc updated. Start a new shell to enjoy tab completion!"
+  elif [[ $SHELL == *"bash"* ]]; then
+    echo -e "\nBASH detected. The following lines will be added to $HOME/.bashrc"
+    echo -e " source $path\n"
+    read -rp "Press [Enter] to continue..."
 
-		echo -e "\nFISH detected. The following lines will be added to $HOME/.config/fish/config.fish"
-		echo -e " source $destination_path\n"
-		read -p "Press [Enter] to continue..."
+    echo -e "\n#Kubernetes Tools bash completion start\nsource $path\n#Kubernetes Tools bash completion end\n" >> "$HOME/.bashrc"
+    echo -e "\n.bashrc updated. Start a new shell to enjoy tab completion!"
+  elif [[ $SHELL == *"fish"* ]]; then
+    local source_path="$app_root/completion/kubernetes-tools.fish"
+    local destination_path="$HOME/.config/fish/completions/kubernetes-tools.fish"
 
-		cp $source_path $destination_path
-		echo -e "\n# Kubernetes Tools fish completion start\nsource $destination_path\n" >> $HOME/.config/fish/config.fish
-		echo -e "\n.config.fish updated."
-		source $destination_path
-	else
-		echo "Only BASH, FISH and ZSH are supported at this stage. Sorry."
-	fi
+    mkdir -p "$HOME/.config/fish/completions"
+    echo -e "\nFISH detected. Completions will be installed to:"
+    echo -e " $destination_path\n"
+    read -rp "Press [Enter] to continue..."
+
+    cp "$source_path" "$destination_path"
+    echo -e "\nFish completions installed."
+  else
+    __err "Only BASH, FISH and ZSH are supported. Detected: $SHELL"
+    exit 1
+  fi
 }
 
-function init() {
-	path=$(greadlink -f "$0")
-	app_root=$(dirname $(dirname ${path:-"$0"}))
+init() {
+  local readlink_cmd="readlink"
+  if command -v greadlink >/dev/null 2>&1; then
+    readlink_cmd="greadlink"
+  fi
+  local path
+  path=$($readlink_cmd -f "$0" 2>/dev/null || echo "$0")
+  local app_root
+  app_root=$(dirname "$(dirname "${path:-$0}")")
 
-	# set up tab completion
-	auto_completion $app_root
+  auto_completion "$app_root"
 }
 
-# sohw help
 show_help() {
   echo -e $__title
   echo
   echo -e "- List all tools: ${__style_underlined}ktools${__style_end}"
   echo -e "- Setup auto completion: ${__style_underlined}ktools [-i|--init]${__style_end}"
   echo
-  echo -e "${__style_green}kctx${__style_end}: List contexts, switch context"
-  echo -e "${__style_green}kns${__style_end}: List namespaces, select default namespace"
-  echo -e "${__style_green}kpod${__style_end}: List pods in current namespace, describe pod"
-  echo -e "${__style_green}kexec${__style_end}: Get a shell of a selected container"
-  echo -e "${__style_green}klogs${__style_end}: Get logs of a selected container"
-  echo -e "${__style_green}kcopy${__style_end}: Copy common cli tools to selected container"
+  echo -e "${__style_bold}Context & namespace${__style_end}"
+  echo -e "  ${__style_green}kctx${__style_end}     List/switch contexts (-s interactive, - last)"
+  echo -e "  ${__style_green}kns${__style_end}      List/switch namespaces (-s interactive)"
+  echo
+  echo -e "${__style_bold}Inspect${__style_end}"
+  echo -e "  ${__style_green}kpod${__style_end}     List/describe pods (-a all, -o wide, -s <status>, -w watch)"
+  echo -e "  ${__style_green}knode${__style_end}    Node info: capacity, taints, pods"
+  echo -e "  ${__style_green}kall${__style_end}     Overview of namespace (pods, svc, ingress, deploy, hpa)"
+  echo -e "  ${__style_green}kevents${__style_end}  Events sorted by lastTimestamp (essential troubleshoot)"
+  echo -e "  ${__style_green}ktop${__style_end}     Top pods/nodes (requires metrics-server)"
+  echo -e "  ${__style_green}kimg${__style_end}     List images used in the namespace"
+  echo
+  echo -e "${__style_bold}Interact${__style_end}"
+  echo -e "  ${__style_green}kexec${__style_end}    Shell into a container, or run a custom command"
+  echo -e "  ${__style_green}klogs${__style_end}    Get logs (-f follow, --tail, --since, -p previous, -a all)"
+  echo -e "  ${__style_green}kpf${__style_end}      Port-forward a pod or service"
+  echo -e "  ${__style_green}kdebug${__style_end}   Debug pod via kubectl debug (ephemeral container)"
+  echo -e "  ${__style_green}kcopy${__style_end}    Copy busybox into a container (legacy; prefer kdebug)"
+  echo -e "  ${__style_green}ksecret${__style_end}  List/decode secrets (no manual base64 -d)"
+  echo
+  echo -e "${__style_bold}Operate${__style_end}"
+  echo -e "  ${__style_green}krestart${__style_end} Rollout restart a deployment/statefulset/daemonset"
+  echo -e "  ${__style_green}kscale${__style_end}   Scale a deployment quickly"
+  echo -e "  ${__style_green}kclean${__style_end}   Delete Evicted/Failed/Completed pods"
+  echo -e "  ${__style_green}kdiff${__style_end}    Pretty server-side diff before kubectl apply"
   echo
   echo -e "For usage of each tool, run ${__style_underlined}[tool_name] -h${__style_end}\n"
 }
 
-# parse arguments
 while [ "$1" != "" ]; do
   case $1 in
-    -i | --init ) shift
+    -i | --init )
       init
-      exit
+      exit 0
       ;;
-    -h | --help ) shift
+    -h | --help )
       show_help
-      exit
+      exit 0
       ;;
-    * ) exit 0
+    -v | --version )
+      echo "$__app_name $__version"
+      exit 0
+      ;;
+    * )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
   esac
   shift
 done
 
-# show help message if no arguments specified
 if [ $# -eq 0 ]; then show_help; fi

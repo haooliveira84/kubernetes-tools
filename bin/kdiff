@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Kubernetes Tools - kdiff
+# Server-side diff against a manifest file before kubectl apply.
+
+source __common
+
+FILE=""
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Diff a manifest against the cluster: ${__style_underlined}kdiff <file>${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kdiff -n <ns> <file>${__style_end}"
+  echo
+  echo -e "${__style_dim}Uses 'colordiff' if available, falls back to plain diff.${__style_end}\n"
+}
+
+run() {
+  if [[ -z "$FILE" ]]; then
+    show_help
+    exit 1
+  fi
+  if [[ ! -e "$FILE" ]]; then
+    __err "File not found: $FILE"
+    exit 1
+  fi
+
+  local ns_flag=""
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+  fi
+
+  if command -v colordiff >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    KUBECTL_EXTERNAL_DIFF="colordiff -u" kubectl diff $ns_flag -f "$FILE"
+  else
+    # shellcheck disable=SC2086
+    kubectl diff $ns_flag -f "$FILE"
+  fi
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+    * )
+      FILE="$1"
+      ;;
+  esac
+  shift
+done
+
+run

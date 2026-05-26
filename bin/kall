@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Kubernetes Tools - kall
+# Compact overview of a namespace: pods, services, ingress, deployments, hpa.
+
+source __common
+
+show_help() {
+  echo -e $__title
+  echo
+  echo -e "- Overview of current namespace: ${__style_underlined}kall${__style_end}"
+  echo -e "- Use another namespace: ${__style_underlined}kall -n <ns>${__style_end}\n"
+}
+
+run() {
+  local ns_flag=""
+  local ns
+  if [[ -n "$KTOOLS_NAMESPACE" ]]; then
+    ns_flag="-n $KTOOLS_NAMESPACE"
+    ns="$KTOOLS_NAMESPACE"
+  else
+    ns="$(__current_namespace)"
+  fi
+
+  echo -e "${__style_bold}Namespace:${__style_end} ${__style_green}$ns${__style_end}"
+  echo
+
+  for kind in deployments statefulsets daemonsets pods services ingress hpa pvc cronjobs jobs; do
+    # shellcheck disable=SC2086
+    local out
+    out="$(kubectl get $kind $ns_flag --ignore-not-found 2>/dev/null)"
+    if [[ -n "$out" ]]; then
+      echo -e "${__style_yellow}--- $kind ---${__style_end}"
+      echo "$out"
+      echo
+    fi
+  done
+}
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -n | --namespace ) shift
+      export KTOOLS_NAMESPACE="$1"
+      ;;
+    -h | --help )
+      show_help
+      exit 0
+      ;;
+    -* )
+      __err "Unknown flag: $1"
+      show_help
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+run
