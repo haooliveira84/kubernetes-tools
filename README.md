@@ -68,6 +68,23 @@ export PATH="$HOME/kubernetes-tools/bin:$PATH"
 ktools --init
 ```
 
+### Pre-built tarball (no git required)
+Each release attaches a curated tarball + zip and a `sha256sums.txt`:
+
+```sh
+VERSION=2.2.0
+curl -fsSL -o ktools.tar.gz \
+  "https://github.com/haooliveira84/kubernetes-tools/releases/download/v${VERSION}/kubernetes-tools-${VERSION}.tar.gz"
+
+# Verify checksum (optional but recommended)
+curl -fsSL "https://github.com/haooliveira84/kubernetes-tools/releases/download/v${VERSION}/sha256sums.txt" \
+  | grep "kubernetes-tools-${VERSION}.tar.gz" | sha256sum -c -
+
+tar -xzf ktools.tar.gz -C ~
+export PATH="$HOME/kubernetes-tools-${VERSION}/bin:$PATH"
+ktools --init
+```
+
 #### Bash completion
 ```sh
 source $HOME/kubernetes-tools/completion/__completion

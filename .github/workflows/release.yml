@@ -51,6 +51,55 @@ jobs:
           echo "tarball_url=${URL}" >> "$GITHUB_OUTPUT"
           echo "Tarball SHA-256: ${SHA}"
 
+  package:
+    name: Build and upload artifacts
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build distribution artifacts
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          TAG: v${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          STAGE="kubernetes-tools-${VERSION}"
+          mkdir -p "dist/${STAGE}"
+
+          # Curated payload — no .git, no .github, no demo gifs, no Formula.
+          cp -R bin completion "dist/${STAGE}/"
+          cp README.md LICENSE "dist/${STAGE}/"
+
+          # Make sure scripts are executable inside the archive.
+          chmod +x "dist/${STAGE}/bin/"k* || true
+
+          cd dist
+          tar -czf "${STAGE}.tar.gz" "${STAGE}"
+          zip -qr "${STAGE}.zip" "${STAGE}"
+
+          # Checksums for both archives.
+          sha256sum "${STAGE}.tar.gz" "${STAGE}.zip" > sha256sums.txt
+
+          echo "--- artifacts ---"
+          ls -la
+          echo "--- sha256sums.txt ---"
+          cat sha256sums.txt
+
+      - name: Upload artifacts to the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.release.outputs.version }}
+        run: |
+          cd dist
+          gh release upload "${TAG}" \
+            "kubernetes-tools-${{ needs.release.outputs.version }}.tar.gz" \
+            "kubernetes-tools-${{ needs.release.outputs.version }}.zip" \
+            "sha256sums.txt" \
+            --clobber \
+            --repo "${{ github.repository }}"
+
   bump-formula-in-repo:
     name: Bump Formula in this repo
     needs: release
