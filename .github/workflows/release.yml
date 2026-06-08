@@ -149,7 +149,7 @@ jobs:
     if: ${{ vars.HOMEBREW_TAP_REPO != '' }}
     steps:
       - name: Bump formula in tap
-        uses: mislav/bump-homebrew-formula-action@v3
+        uses: mislav/bump-homebrew-formula-action@v4
         with:
           formula-name: kubernetes-tools
           formula-path: Formula/kubernetes-tools.rb
