@@ -9,10 +9,21 @@ class KubernetesTools < Formula
   depends_on "jq"
   depends_on "kubernetes-cli"
 
+  KTOOLS_COMPLETED_COMMANDS = %w[
+    klogs kexec kcopy kpod kdebug kevents
+    kns kctx knode krestart kscale kpf ksecret
+  ].freeze
+
   def install
     bin.install Dir["bin/*"]
 
+    # Symlink per command so bash-completion v2's lazy loader (lookup by
+    # command name) finds the file when the user hits <TAB> on klogs, kctx, ...
     bash_completion.install "completion/__completion" => "ktools"
+    KTOOLS_COMPLETED_COMMANDS.each do |cmd|
+      bash_completion.install_symlink "ktools" => cmd
+    end
+
     fish_completion.install "completion/kubernetes-tools.fish"
 
     # Point the zsh wrapper at the installed bash completion file so
@@ -49,6 +60,9 @@ class KubernetesTools < Formula
     assert_match "klogs", shell_output("#{bin}/ktools -h")
 
     assert_path_exists bash_completion/"ktools"
+    KTOOLS_COMPLETED_COMMANDS.each do |cmd|
+      assert_path_exists bash_completion/cmd
+    end
     assert_path_exists zsh_completion/"_ktools"
     assert_path_exists fish_completion/"kubernetes-tools.fish"
   end
