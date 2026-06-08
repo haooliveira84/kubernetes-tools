@@ -1,0 +1,14 @@
+#compdef ktools klogs kexec kcopy kpod kdebug kns kctx knode krestart kscale kpf ksecret kevents
+
+# Zsh wrapper for the bundled bash completion. Homebrew rewrites the
+# @BASH_COMPLETION_FILE@ marker at install time. For manual installs,
+# set KTOOLS_BASH_COMPLETION to the bash file path before sourcing.
+
+if (( ! ${+functions[bashcompinit]} )); then
+  autoload -Uz +X bashcompinit && bashcompinit
+fi
+
+local _ktools_bash="${KTOOLS_BASH_COMPLETION:-@BASH_COMPLETION_FILE@}"
+if [[ -f "$_ktools_bash" ]]; then
+  source "$_ktools_bash"
+fi

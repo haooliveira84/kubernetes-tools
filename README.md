@@ -57,8 +57,12 @@ For usage of each tool:
 ```sh
 brew tap haooliveira84/tap
 brew install kubernetes-tools
-ktools --init
 ```
+
+Shell completion (bash, zsh, fish) is installed automatically into Homebrew's
+standard completion paths — no extra step required. If completions don't show
+up, make sure your shell loads `brew shellenv` and (for bash) has the
+`bash-completion` package enabled.
 
 ### Manual installation
 ```sh
@@ -125,6 +129,14 @@ The script bumps the version in `bin/__common`, creates an annotated tag and pus
 MIT — see [LICENSE](LICENSE).
 
 ## Release Notes
+
+### v2.3.0
+- Homebrew install now wires bash/zsh/fish completions into Homebrew's standard
+  completion paths — `ktools --init` is no longer required for brew users.
+- Added native zsh completion (`_ktools`) that loads via `bashcompinit`.
+- Fixed `kpf` completion (was completing services; now completes pods, and
+  switches to services when `-s` is the previous argument).
+- Added pod completion for `kevents`.
 
 ### v2.2.0
 - New commands: `kevents`, `kpf`, `krestart`, `kdebug`, `ksecret`, `knode`, `kall`, `kclean`, `ktop`, `kscale`, `kdiff`, `kimg`.

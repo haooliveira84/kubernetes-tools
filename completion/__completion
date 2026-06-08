@@ -65,6 +65,17 @@ __ktools_services() {
   COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
 }
 
+# kpf defaults to pods; switches to services when the previous arg is -s.
+__ktools_kpf() {
+  local prev
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  if [[ "$prev" == "-s" ]]; then
+    __ktools_services
+  else
+    __ktools_pods
+  fi
+}
+
 __ktools_secrets() {
   local cur ns
   COMPREPLY=()
@@ -75,10 +86,10 @@ __ktools_secrets() {
   COMPREPLY=( $( compgen -W "$items" -- "$cur" ) )
 }
 
-complete -F __ktools_pods        klogs kexec kcopy kpod kdebug
+complete -F __ktools_pods        klogs kexec kcopy kpod kdebug kevents
 complete -F __ktools_namespaces  kns
 complete -F __ktools_contexts    kctx
 complete -F __ktools_nodes       knode
 complete -F __ktools_deployments krestart kscale
-complete -F __ktools_services    kpf
 complete -F __ktools_secrets     ksecret
+complete -F __ktools_kpf         kpf
