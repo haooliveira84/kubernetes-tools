@@ -145,20 +145,41 @@ jobs:
     name: Bump Formula in homebrew-tap
     needs: release
     runs-on: ubuntu-latest
-    # Only runs if a HOMEBREW_TAP_TOKEN secret is configured.
     if: ${{ vars.HOMEBREW_TAP_REPO != '' }}
     steps:
-      - name: Bump formula in tap
-        uses: mislav/bump-homebrew-formula-action@v4
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
         with:
-          formula-name: kubernetes-tools
-          formula-path: Formula/kubernetes-tools.rb
-          homebrew-tap: ${{ vars.HOMEBREW_TAP_REPO }}
-          tag-name: ${{ github.ref_name }}
-          download-url: ${{ needs.release.outputs.tarball_url }}
-          commit-message: |
-            kubernetes-tools ${{ needs.release.outputs.version }}
+          repository: ${{ vars.HOMEBREW_TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
 
-            Created by https://github.com/mislav/bump-homebrew-formula-action
+      - name: Update Formula
         env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+          SHA256: ${{ needs.release.outputs.sha256 }}
+          TARBALL_URL: ${{ needs.release.outputs.tarball_url }}
+        run: |
+          set -euo pipefail
+          FILE="tap/Formula/kubernetes-tools.rb"
+          sed -i -E "s|url \".*\"|url \"${TARBALL_URL}\"|" "$FILE"
+          sed -i -E "s|sha256 \"[0-9a-f]{64}\"|sha256 \"${SHA256}\"|" "$FILE"
+          sed -i -E "s|version \".*\"|version \"${VERSION}\"|" "$FILE"
+          echo "--- updated formula ---"
+          cat "$FILE"
+
+      - name: Commit and push formula bump
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd tap
+          if git diff --quiet -- Formula/kubernetes-tools.rb; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/kubernetes-tools.rb
+          git commit -m "kubernetes-tools ${VERSION}"
+          git push
