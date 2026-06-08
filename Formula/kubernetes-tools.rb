@@ -3,7 +3,7 @@ class KubernetesTools < Formula
   homepage "https://github.com/haooliveira84/kubernetes-tools"
   url "https://github.com/haooliveira84/kubernetes-tools/archive/refs/tags/v2.3.0.tar.gz"
   version "2.3.0"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "48e708b436183fe65e6dd25bea162749c704352e90832caaa291a37bd5e9f6bc"
   license "MIT"
 
   depends_on "jq"
