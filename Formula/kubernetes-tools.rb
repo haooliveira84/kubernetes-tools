@@ -24,7 +24,12 @@ class KubernetesTools < Formula
       bash_completion.install_symlink "ktools" => cmd
     end
 
-    fish_completion.install "completion/kubernetes-tools.fish"
+    # Same lazy-loading dance for fish: install under a primary name and
+    # symlink each command so vendor_completions.d picks it up by filename.
+    fish_completion.install "completion/kubernetes-tools.fish" => "ktools.fish"
+    KTOOLS_COMPLETED_COMMANDS.each do |cmd|
+      fish_completion.install_symlink "ktools.fish" => "#{cmd}.fish"
+    end
 
     # Point the zsh wrapper at the installed bash completion file so
     # bashcompinit can source it without depending on $PATH lookups.
@@ -64,6 +69,9 @@ class KubernetesTools < Formula
       assert_path_exists bash_completion/cmd
     end
     assert_path_exists zsh_completion/"_ktools"
-    assert_path_exists fish_completion/"kubernetes-tools.fish"
+    assert_path_exists fish_completion/"ktools.fish"
+    KTOOLS_COMPLETED_COMMANDS.each do |cmd|
+      assert_path_exists fish_completion/"#{cmd}.fish"
+    end
   end
 end

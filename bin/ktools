@@ -28,14 +28,21 @@ auto_completion() {
     echo -e "\n.bashrc updated. Start a new shell to enjoy tab completion!"
   elif [[ $SHELL == *"fish"* ]]; then
     local source_path="$app_root/completion/kubernetes-tools.fish"
-    local destination_path="$HOME/.config/fish/completions/kubernetes-tools.fish"
+    local dest_dir="$HOME/.config/fish/completions"
+    local master="$dest_dir/ktools.fish"
 
-    mkdir -p "$HOME/.config/fish/completions"
+    mkdir -p "$dest_dir"
     echo -e "\nFISH detected. Completions will be installed to:"
-    echo -e " $destination_path\n"
+    echo -e " $dest_dir/{ktools,klogs,kexec,kcopy,kpod,kdebug,kevents,kns,kctx,knode,krestart,kscale,kpf,ksecret}.fish\n"
     read -rp "Press [Enter] to continue..."
 
-    cp "$source_path" "$destination_path"
+    # Remove stale install from older versions (single file, sometimes +x).
+    rm -f "$dest_dir/kubernetes-tools.fish"
+
+    install -m 0644 "$source_path" "$master"
+    for cmd in klogs kexec kcopy kpod kdebug kevents kns kctx knode krestart kscale kpf ksecret; do
+      ln -sf "ktools.fish" "$dest_dir/${cmd}.fish"
+    done
     echo -e "\nFish completions installed."
   else
     __err "Only BASH, FISH and ZSH are supported. Detected: $SHELL"
