@@ -143,10 +143,16 @@ jobs:
 
   bump-formula-in-tap:
     name: Bump Formula in homebrew-tap
-    needs: release
+    needs: [release, bump-formula-in-repo]
     runs-on: ubuntu-latest
     if: ${{ vars.HOMEBREW_TAP_REPO != '' }}
     steps:
+      - name: Checkout this repo (post bump-formula-in-repo)
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: src
+
       - name: Checkout homebrew-tap
         uses: actions/checkout@v4
         with:
@@ -154,7 +160,7 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
-      - name: Update Formula
+      - name: Sync Formula from upstream repo
         env:
           VERSION: ${{ needs.release.outputs.version }}
           SHA256: ${{ needs.release.outputs.sha256 }}
@@ -162,6 +168,9 @@ jobs:
         run: |
           set -euo pipefail
           FILE="tap/Formula/kubernetes-tools.rb"
+          # Copy the canonical Formula (including install body, tests, caveats)
+          # then make sure url/sha/version reflect this release.
+          cp src/Formula/kubernetes-tools.rb "$FILE"
           sed -i -E "s|url \".*\"|url \"${TARBALL_URL}\"|" "$FILE"
           sed -i -E "s|sha256 \"[0-9a-f]{64}\"|sha256 \"${SHA256}\"|" "$FILE"
           sed -i -E "s|version \".*\"|version \"${VERSION}\"|" "$FILE"

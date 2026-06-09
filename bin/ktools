@@ -10,6 +10,15 @@ source __common
 auto_completion() {
   echo "Adding shell completion"
   local app_root="$1"
+
+  if [[ ! -d "$app_root/completion" ]]; then
+    __info "Shell completions are managed by your package manager (e.g. Homebrew)."
+    __info "They are installed into the standard completion paths automatically."
+    __info "If completions don't show up, restart your shell, or:"
+    __info "  brew reinstall kubernetes-tools"
+    exit 0
+  fi
+
   local path="$app_root/completion/__completion"
 
   if [[ $SHELL == *"zsh"* ]]; then
